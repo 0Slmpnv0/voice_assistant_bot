@@ -13,7 +13,7 @@ def init():
     sql_users = '''CREATE TABLE IF NOT EXISTS users(
     id INTEGER PRIMARY KEY,
     user_id INTEGER,
-    tokens_remaining INTEGER,
+    gpt_tokens INTEGER,
     tts_characters INTEGER,
     stt_blocks INTEGER
     )'''
@@ -47,7 +47,7 @@ def insert_into_users(
     conn.close()
 
 
-def update_users(user_id, column, value):
+def update_user_limits(user_id, column, value):
     sql = f'''UPDATE users SET {column} = ? WHERE user_id = ?'''
     conn = sqlite3.connect('db.sqlite3')
     cur = conn.cursor()
@@ -63,6 +63,19 @@ def get_user_context(user_id):
     conn.row_factory = sqlite3.Row
 
     res = []
+    for i in cur.execute(sql, (user_id,)):
+        res.append(dict(i))
+
+    return res
+
+
+def get_user_limits(user_id):
+    sql = '''SELECT gpt_tokens, tts_characters, stt_blocks FROM users WHERE user_id = ?'''
+    conn = sqlite3.connect('db.sqlite3')
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    res = []
+
     for i in cur.execute(sql, (user_id,)):
         res.append(dict(i))
 
