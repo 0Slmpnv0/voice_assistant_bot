@@ -49,9 +49,8 @@ class GPT:
         self.model_tokens = max_model_resp_tokens
         self.context: list[dict[str: str]] = []
 
-    def add_context(self, context: list[dict[str: str]] | dict[str: str]):
-        for prompt in context:
-            self.context.append(prompt)
+    def add_context(self, context: dict[str: str]):
+        self.context.append(context)
 
     def count_tokens(self, text) -> int:
         headers = {
@@ -79,16 +78,18 @@ class GPT:
     def rm_context(self):
         self.context = []
 
-    def ask_gpt(self, prompt: str):
+    def ask_gpt(self, text: str):
         sys_prompt = 'Ты - доброжелательный ассистент-помощник'
 
-        if self.count_tokens(prompt) > self.tokens:
+        if self.count_tokens(text) > self.tokens:
+            ic('Вернул исключение!')
             return 'exc', (f'Запрос вышел слишком длинным. У вас осталось {self.tokens} токенов. Это примерно '
                            f'{self.tokens * 3} символов')
         if not self.tokens:
             self.tokens -= self.count_tokens(sys_prompt)
+        ic(self.context)
         context_prompt = ''.join([prompt['text'] for prompt in self.context])
-        self.tokens -= self.count_tokens(prompt + context_prompt)
+        self.tokens -= self.count_tokens(text + context_prompt)
         check_iam()
 
         headers = {
@@ -102,7 +103,7 @@ class GPT:
                 "temperature": 0.7,
                 "maxTokens": min(self.model_tokens, self.tokens)
             },
-            "messages": [{"role": "system", "text": sys_prompt}] + self.context + [{'role': 'user', 'text': prompt}]
+            "messages": [{"role": "system", "text": sys_prompt}] + self.context + [{'role': 'user', 'text': text}]
         }
         response = requests.post(
             'https://llm.api.cloud.yandex.net/foundationModels/v1/completion',
@@ -110,14 +111,16 @@ class GPT:
             json=json
         )
         if response.status_code != 200:
+            ic('Вернул ошибку!')
             return 'err', f'Извините! У нас что-то поломалось. Код ошибки: {response.status_code}'
         else:
-            text = response.json()['result']['alternatives'][0]['message']['text']
-            self.context.append({'role': 'user', 'text': prompt})
-            self.context.append({'role': 'assistant', 'text': text})
-            self.save_prompt({'role': 'user', 'text': prompt})
-            self.save_prompt({'role': 'assistant', 'text': text})
-            return 'succ', text
+            resp = response.json()['result']['alternatives'][0]['message']['text']
+            self.context.append({'role': 'user', 'text': text})
+            self.context.append({'role': 'assistant', 'text': resp})
+            self.save_prompt({'role': 'user', 'text': text})
+            self.save_prompt({'role': 'assistant', 'text': resp})
+            ic('Вернул успех!')
+            return 'succ', resp
 
 
 class Speechkit:
@@ -134,7 +137,7 @@ class Speechkit:
     def text_to_speech(self, text: str, speaker: str = 'alena'):
         check_iam()
         if len(text) > self.chars:
-            return 'exc', self.chars
+            return 'exc', 'Слишком длинно!!!'
         else:
             headers = {'Authorization': f'Bearer {iam}'}
             data = {
@@ -188,22 +191,40 @@ class Speechkit:
 class UI(Speechkit, GPT):
     def __init__(self, user_id: int, tokens=config.MAX_USER_TOKENS,
                  blocks=config.MAX_STT_BLOCKS, chars=config.MAX_TTS_CHARS):
-        Speechkit.__init__(self, user_id=user_id, blocks=blocks, chars=chars)
-        GPT.__init__(self, user_id=user_id, tokens=tokens)
+        Speechkit.__init__(self, user_id=user_id, blocks=blocks, chars=chars) # Я почти уверен, что
+        GPT.__init__(self, user_id=user_id, tokens=tokens)  # делаю это неправильно
         users[user_id] = self
 
-    def process_text_request(self, text: str) -> tuple[str, str]:  # можно было оставить ask_gpt, но мне больше
+    def process_text_message(self, text: str) -> tuple[str, str]:  # можно было оставить ask_gpt, но мне больше
         # нравится идея вообще не вспоминать даже что у меня там чем занимается, а только process методы использовать
-        check_iam()
+        check_iam()  # тем более так можно айэм проверить
+        ic('процессю текст мессадж!')
         return self.ask_gpt(text)
 
-    def process_voice_request(self, voice: bin, duration: int | float) -> tuple[bool, str | bytes]:
+    def process_voice_message(self, voice: bin, duration: int | float) -> tuple[bool, str | bytes]:
         check_iam()
+        ic('Процессю войс мессадж!')
         status, text = self.speech_to_text(voice, duration)
+        ic('спич тут текст удался')
         if not status:
+            ic('Вернул что-то 1!')
             return False, text
-        status, response = self.ask_gpt(text)
+        status, text_answer = self.ask_gpt(text)
+        ic('аск гэпэтэ удался')
         if status != 'succ':
+            ic('Вернул что-то! 2')
             return False, text
-        status, resp = self.text_to_speech(response)
+        status, resp = self.text_to_speech(text_answer)
+        ic('текст ту спич удался!')
+        if status == 'exc':
+            ic('Вернул исключение!')
+            return (False, 'Текст ответа вышел слишком длинным, чтобы его преобразовать в голос( ответ помощника: \n' +
+                    text_answer)
+        ic('Вернул что-то! 3')
         return True if status == 'succ' else False, resp
+
+    def get_limits(self):
+        return f'''Ваши лимиты:
+1. Токены: {self.tokens} (это очень примерно около {self.tokens * 3})
+2. Блоки: {self.blocks} (это {self.blocks * 15} секунд распознования речи)
+3. Символы: {self.chars}. Столько символов можно преобразовать в голосовое сообщение. Если количество символов будет меньше, чем длина сообщения, сочиненного нейросетью, то отправим сообщение текстом'''

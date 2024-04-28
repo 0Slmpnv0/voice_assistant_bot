@@ -1,5 +1,6 @@
 import sqlite3
 import config
+from icecream import ic
 
 
 def init():
@@ -31,6 +32,8 @@ def insert_into_prompts(user_id, role, text):
     conn = sqlite3.connect('db.sqlite3')
     cur = conn.cursor()
     cur.execute(sql, (user_id, role, text))
+    conn.commit()
+    conn.close()
 
 
 def insert_into_users(
@@ -56,13 +59,15 @@ def update_user_limits(user_id, column, value):
 
 
 def get_user_context(user_id):
-    sql = '''SELECT * FROM prompts WHERE user_id = ?'''
+    sql = '''SELECT role, text FROM prompts WHERE user_id = ?'''
     conn = sqlite3.connect('db.sqlite3')
     cur = conn.cursor()
     conn.row_factory = sqlite3.Row
     res = []
     for i in cur.execute(sql, (user_id,)):
-        res.append(dict(i))
+        ic({'role': i[0], 'text': i[1]})
+        res.append({'role': i[0], 'text': i[1]})
+    ic(res)
     return res
 
 
