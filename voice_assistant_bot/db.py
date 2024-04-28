@@ -38,8 +38,7 @@ def insert_into_users(
         tokens_remaining: int = config.MAX_USER_TOKENS,
         tts_characters: int = config.MAX_TTS_CHARS,
         stt_blocks: int = config.MAX_STT_BLOCKS):
-
-    sql = '''INSERT INTO users(user_id, tokens_remaining, tts_characters, stt_blocks) VALUES (?, ?, ?, ?)'''
+    sql = '''INSERT INTO users(user_id, gpt_tokens, tts_characters, stt_blocks) VALUES (?, ?, ?, ?)'''
     conn = sqlite3.connect('db.sqlite3')
     cur = conn.cursor()
     cur.execute(sql, (user_id, tokens_remaining, tts_characters, stt_blocks))
@@ -61,11 +60,9 @@ def get_user_context(user_id):
     conn = sqlite3.connect('db.sqlite3')
     cur = conn.cursor()
     conn.row_factory = sqlite3.Row
-
     res = []
     for i in cur.execute(sql, (user_id,)):
         res.append(dict(i))
-
     return res
 
 
@@ -78,5 +75,15 @@ def get_user_limits(user_id):
 
     for i in cur.execute(sql, (user_id,)):
         res.append(dict(i))
+    return res
 
+
+def get_users():
+    sql = '''SELECT * FROM users'''
+    conn = sqlite3.connect('db.sqlite3')
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    res = []
+    for i in cur.execute(sql):
+        res.append(dict(i))
     return res

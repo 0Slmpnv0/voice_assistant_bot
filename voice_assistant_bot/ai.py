@@ -5,6 +5,7 @@ from icecream import ic
 import time
 import db
 from dotenv import get_key
+from conspiracy import iam
 
 users = {}
 
@@ -28,7 +29,7 @@ def check_iam() -> None:
 
 
 #  token_data = create_new_iam_token()
-token_data = create_new_iam_token()
+token_data = iam
 iam = token_data['access_token']
 expires_at = time.time() + token_data['expires_in']
 folder_id = get_key('.env', 'FOLDER_ID')
@@ -99,7 +100,7 @@ class GPT:
             "completionOptions": {
                 "stream": False,
                 "temperature": 0.7,
-                "maxTokens": self.model_tokens
+                "maxTokens": min(self.model_tokens, self.tokens)
             },
             "messages": [{"role": "system", "text": sys_prompt}] + self.context + [{'role': 'user', 'text': prompt}]
         }
@@ -114,6 +115,8 @@ class GPT:
             text = response.json()['result']['alternatives'][0]['message']['text']
             self.context.append({'role': 'user', 'text': prompt})
             self.context.append({'role': 'assistant', 'text': text})
+            self.save_prompt({'role': 'user', 'text': prompt})
+            self.save_prompt({'role': 'assistant', 'text': text})
             return 'succ', text
 
 
@@ -183,12 +186,24 @@ class Speechkit:
 
 
 class UI(Speechkit, GPT):
-    def __init__(self, user_id: int):
-        super().__init__(user_id)
+    def __init__(self, user_id: int, tokens=config.MAX_USER_TOKENS,
+                 blocks=config.MAX_STT_BLOCKS, chars=config.MAX_TTS_CHARS):
+        Speechkit.__init__(self, user_id=user_id, blocks=blocks, chars=chars)
+        GPT.__init__(self, user_id=user_id, tokens=tokens)
         users[user_id] = self
 
-    def process_text_request(self, text: str):
-        raise NotImplementedError
+    def process_text_request(self, text: str) -> tuple[str, str]:  # можно было оставить ask_gpt, но мне больше
+        # нравится идея вообще не вспоминать даже что у меня там чем занимается, а только process методы использовать
+        check_iam()
+        return self.ask_gpt(text)
 
-    def process_voice_request(self, voice: bin, duration: int | float):
-        raise NotImplementedError
+    def process_voice_request(self, voice: bin, duration: int | float) -> tuple[bool, str | bytes]:
+        check_iam()
+        status, text = self.speech_to_text(voice, duration)
+        if not status:
+            return False, text
+        status, response = self.ask_gpt(text)
+        if status != 'succ':
+            return False, text
+        status, resp = self.text_to_speech(response)
+        return True if status == 'succ' else False, resp
