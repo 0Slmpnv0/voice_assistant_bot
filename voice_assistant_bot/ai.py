@@ -5,7 +5,6 @@ from icecream import ic
 import time
 import db
 from dotenv import get_key
-from conspiracy import iam
 
 users = {}
 
@@ -28,8 +27,7 @@ def check_iam() -> None:
         expires_at = iam_data['expires_in']
 
 
-#  token_data = create_new_iam_token()
-token_data = iam
+token_data = create_new_iam_token()
 iam = token_data['access_token']
 expires_at = time.time() + token_data['expires_in']
 folder_id = get_key('.env', 'FOLDER_ID')
