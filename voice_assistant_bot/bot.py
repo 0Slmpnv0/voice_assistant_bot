@@ -52,20 +52,18 @@ def limits(message: Message):
 
 @bot.message_handler()
 def process_text(message: Message):
-    ic('Сообщение текстовое!')
     bot.send_message(message.from_user.id, users[message.from_user.id].process_text_message(message.text)[1])
 
 
 @bot.message_handler(content_types=['audio', 'voice'])
 def process_voice(message: Message):
-    ic('Сообщение голосовое!')
     duration = message.voice.duration
     voice = bot.download_file(bot.get_file(message.voice.file_id).file_path)
     status, resp = users[message.from_user.id].process_voice_message(voice, duration)
     if not status:
         bot.send_message(message.from_user.id, resp)
     else:
-        bot.send_audio(message.from_user.id, resp)
+        bot.send_voice(message.from_user.id, resp)
 
 
 def looser(message: Message):

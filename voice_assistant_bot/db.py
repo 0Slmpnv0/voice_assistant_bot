@@ -3,7 +3,10 @@ import config
 from icecream import ic
 
 
-def init():
+def init() -> None:
+    """Создает базу данных и две таблицы:
+    users(чтобы хранить юзеров и их лимиты)
+    prompts (чтобы хранить контекст диалога юзера и ассистента)"""
     sql_prompts = '''CREATE TABLE IF NOT EXISTS prompts(
     id INTEGER PRIMARY KEY,
     user_id INTEGER,
@@ -27,7 +30,8 @@ def init():
     conn.close()
 
 
-def insert_into_prompts(user_id, role, text):
+def insert_into_prompts(user_id, role, text) -> None:
+    """Добавляет новый промпт в таблицу"""
     sql = '''INSERT INTO prompts(user_id, role, text) VALUES (?, ?, ?)'''
     conn = sqlite3.connect('db.sqlite3')
     cur = conn.cursor()
@@ -40,7 +44,8 @@ def insert_into_users(
         user_id: int,
         tokens_remaining: int = config.MAX_USER_TOKENS,
         tts_characters: int = config.MAX_TTS_CHARS,
-        stt_blocks: int = config.MAX_STT_BLOCKS):
+        stt_blocks: int = config.MAX_STT_BLOCKS) -> None:
+    """Добавляет нового юзера в таблицу"""
     sql = '''INSERT INTO users(user_id, gpt_tokens, tts_characters, stt_blocks) VALUES (?, ?, ?, ?)'''
     conn = sqlite3.connect('db.sqlite3')
     cur = conn.cursor()
@@ -49,8 +54,10 @@ def insert_into_users(
     conn.close()
 
 
-def update_user_limits(user_id, column, value):
-    sql = f'''UPDATE users SET {column} = ? WHERE user_id = ?'''
+def update_user_limits(user_id, column, value) -> None:
+    """Меняет какой-то из лимитов конкретного юзера"""
+    sql = f'''UPDATE users SET {column} = ? WHERE user_id = ?'''  # знаю, что так плохо,
+    # но все равно column только я передаю
     conn = sqlite3.connect('db.sqlite3')
     cur = conn.cursor()
     cur.execute(sql, (value, user_id))
@@ -58,20 +65,20 @@ def update_user_limits(user_id, column, value):
     conn.close()
 
 
-def get_user_context(user_id):
+def get_user_context(user_id) -> list[dict[str: str]] | dict[str, str]:
+    """Возвращает промпты уже в облагороженном виде (так, как они и хранятся в классе GPT)"""
     sql = '''SELECT role, text FROM prompts WHERE user_id = ?'''
     conn = sqlite3.connect('db.sqlite3')
     cur = conn.cursor()
     conn.row_factory = sqlite3.Row
     res = []
     for i in cur.execute(sql, (user_id,)):
-        ic({'role': i[0], 'text': i[1]})
         res.append({'role': i[0], 'text': i[1]})
-    ic(res)
     return res
 
 
-def get_user_limits(user_id):
+def get_user_limits(user_id) -> list[dict[str: str]] | dict[str, str]:
+    """Возвращает лимиты пользователя на использование всякого"""
     sql = '''SELECT gpt_tokens, tts_characters, stt_blocks FROM users WHERE user_id = ?'''
     conn = sqlite3.connect('db.sqlite3')
     conn.row_factory = sqlite3.Row
@@ -83,7 +90,8 @@ def get_user_limits(user_id):
     return res
 
 
-def get_users():
+def get_users() -> list[dict[str: str]] | dict[str, str]:
+    """Возвращает список юзеров и их лимитов"""
     sql = '''SELECT * FROM users'''
     conn = sqlite3.connect('db.sqlite3')
     conn.row_factory = sqlite3.Row
