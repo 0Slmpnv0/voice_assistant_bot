@@ -8,6 +8,7 @@ from telebot.types import Message
 
 bot = telebot.TeleBot(get_key('.env', 'TELEGRAM_BOT_TOKEN'))
 
+db.init()
 old_users = db.get_users()
 for user in old_users:
     UI(user['user_id'], user['gpt_tokens'], user['stt_blocks'], user['tts_characters'])
